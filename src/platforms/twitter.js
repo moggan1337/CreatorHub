@@ -8,6 +8,7 @@
 const axios = require('axios');
 
 const TWITTER_API_BASE = 'https://api.twitter.com/2';
+const XQUIK_API_BASE = 'https://xquik.com';
 
 class TwitterPlatform {
   constructor(config = {}) {
@@ -17,13 +18,23 @@ class TwitterPlatform {
     this.accessToken = config.accessToken || process.env.TWITTER_ACCESS_TOKEN;
     this.accessSecret = config.accessSecret || process.env.TWITTER_ACCESS_SECRET;
     this.apiBase = TWITTER_API_BASE;
+    this.xquikApiKey = config.xquikApiKey || process.env.XQUIK_API_KEY;
+    this.xquikBaseUrl = config.xquikBaseUrl || process.env.XQUIK_BASE_URL || XQUIK_API_BASE;
   }
 
   /**
    * Check if the platform is properly configured
    */
   isConfigured() {
+    return !!this.xquikApiKey || !!this.bearerToken || (!!this.apiKey && !!this.apiSecret);
+  }
+
+  hasTwitterApiCredentials() {
     return !!this.bearerToken || (!!this.apiKey && !!this.apiSecret);
+  }
+
+  hasXquikCredentials() {
+    return !!this.xquikApiKey;
   }
 
   /**
@@ -47,10 +58,24 @@ class TwitterPlatform {
   }
 
   /**
+   * Get headers for Xquik API access
+   */
+  getXquikHeaders() {
+    return {
+      'Authorization': `Bearer ${this.xquikApiKey}`,
+      'Content-Type': 'application/json'
+    };
+  }
+
+  buildXquikUrl(path) {
+    return new URL(path, this.xquikBaseUrl).toString();
+  }
+
+  /**
    * Get user ID from username
    */
   async getUserIdByUsername(username) {
-    if (!this.isConfigured()) {
+    if (!this.hasTwitterApiCredentials()) {
       return 'mock_user_id';
     }
 
@@ -69,7 +94,7 @@ class TwitterPlatform {
    * Fetch user profile information
    */
   async getProfile(usernameOrId) {
-    if (!this.isConfigured()) {
+    if (!this.hasTwitterApiCredentials()) {
       return this.getMockProfile(usernameOrId);
     }
 
@@ -101,7 +126,14 @@ class TwitterPlatform {
    * Fetch user's tweets
    */
   async getTweets(usernameOrId, maxResults = 10) {
-    if (!this.isConfigured()) {
+    if (this.hasXquikCredentials()) {
+      const query = usernameOrId && usernameOrId !== 'me'
+        ? `from:${String(usernameOrId).replace('@', '')}`
+        : (process.env.XQUIK_DEFAULT_QUERY || 'creator OR marketing OR growth');
+      return this.searchTweets(query, maxResults);
+    }
+
+    if (!this.hasTwitterApiCredentials()) {
       return this.getMockTweets(maxResults);
     }
 
@@ -133,6 +165,10 @@ class TwitterPlatform {
    * Search tweets
    */
   async searchTweets(query, maxResults = 10) {
+    if (this.hasXquikCredentials()) {
+      return this.searchXquikTweets(query, maxResults);
+    }
+
     if (!this.isConfigured()) {
       return this.getMockTweets(maxResults);
     }
@@ -160,7 +196,7 @@ class TwitterPlatform {
    * Get tweet by ID
    */
   async getTweet(tweetId) {
-    if (!this.isConfigured()) {
+    if (!this.hasTwitterApiCredentials()) {
       return this.getMockTweetDetails(tweetId);
     }
 
@@ -189,7 +225,7 @@ class TwitterPlatform {
    * Get user followers
    */
   async getFollowers(userId, maxResults = 100) {
-    if (!this.isConfigured()) {
+    if (!this.hasTwitterApiCredentials()) {
       return this.getMockFollowers(maxResults);
     }
 
@@ -213,7 +249,7 @@ class TwitterPlatform {
    * Get user following
    */
   async getFollowing(userId, maxResults = 100) {
-    if (!this.isConfigured()) {
+    if (!this.hasTwitterApiCredentials()) {
       return this.getMockFollowing(maxResults);
     }
 
@@ -237,7 +273,7 @@ class TwitterPlatform {
    * Get user mentions
    */
   async getMentions(userId, maxResults = 10) {
-    if (!this.isConfigured()) {
+    if (!this.hasTwitterApiCredentials()) {
       return this.getMockTweets(maxResults);
     }
 
@@ -341,6 +377,62 @@ class TwitterPlatform {
         engagement: (engagements / (impressions || 1) * 100).toFixed(2),
         url: `https://twitter.com/${author.username}/status/${tweet.id}`,
         source: tweet.source || 'Twitter for iPhone'
+      };
+    });
+  }
+
+  /**
+   * Search tweets through Xquik's X API-compatible read endpoint
+   */
+  async searchXquikTweets(query, maxResults = 10) {
+    try {
+      const response = await axios.get(this.buildXquikUrl('/api/v1/x/tweets/search'), {
+        headers: this.getXquikHeaders(),
+        params: {
+          query,
+          limit: Math.min(maxResults, 100)
+        }
+      });
+
+      return this.transformXquikTweets(response.data.tweets || []);
+    } catch (error) {
+      console.error('Xquik API Error:', error.message);
+      return this.getMockTweets(maxResults);
+    }
+  }
+
+  /**
+   * Transform Xquik tweet search results to CreatorHub's standard format
+   */
+  transformXquikTweets(tweets) {
+    return tweets.map((tweet) => {
+      const author = tweet.author || {};
+      const retweetCount = tweet.retweetCount || tweet.retweet_count || 0;
+      const likeCount = tweet.likeCount || tweet.like_count || 0;
+      const replyCount = tweet.replyCount || tweet.reply_count || 0;
+      const quoteCount = tweet.quoteCount || tweet.quote_count || 0;
+      const viewCount = tweet.viewCount || tweet.view_count || 0;
+      const engagements = retweetCount + likeCount + replyCount + quoteCount;
+      const impressions = viewCount || engagements * (Math.random() * 10 + 5);
+      const username = author.username || tweet.authorUsername || 'unknown';
+
+      return {
+        id: tweet.id,
+        platform: 'twitter',
+        text: tweet.text,
+        authorId: author.id || tweet.authorId || tweet.author_id || 'unknown',
+        authorUsername: username,
+        authorName: author.name || tweet.authorName || username,
+        authorAvatar: author.profileImageUrl || author.profile_image_url || tweet.authorAvatar || '',
+        publishedAt: tweet.createdAt || (tweet.created ? new Date(tweet.created * 1000).toISOString() : new Date().toISOString()),
+        retweets: retweetCount,
+        likes: likeCount,
+        replies: replyCount,
+        quotes: quoteCount,
+        impressions: Math.floor(impressions),
+        engagement: (engagements / (impressions || 1) * 100).toFixed(2),
+        url: tweet.url || `https://x.com/${username}/status/${tweet.id}`,
+        source: 'Xquik'
       };
     });
   }

@@ -36,6 +36,16 @@ describe('TwitterPlatform', () => {
       
       delete process.env.TWITTER_BEARER_TOKEN;
     });
+
+    it('should initialize Xquik configuration', () => {
+      const configPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key',
+        xquikBaseUrl: 'https://example.com'
+      });
+
+      expect(configPlatform.xquikApiKey).toBe('xq_test_key');
+      expect(configPlatform.xquikBaseUrl).toBe('https://example.com');
+    });
   });
 
   describe('isConfigured', () => {
@@ -54,6 +64,15 @@ describe('TwitterPlatform', () => {
     it('should return false when no credentials are present', () => {
       const unconfiguredPlatform = new TwitterPlatform();
       expect(unconfiguredPlatform.isConfigured()).toBe(false);
+    });
+
+    it('should return true when Xquik API key is present', () => {
+      const xquikPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key'
+      });
+
+      expect(xquikPlatform.isConfigured()).toBe(true);
+      expect(xquikPlatform.hasXquikCredentials()).toBe(true);
     });
   });
 
@@ -209,6 +228,39 @@ describe('TwitterPlatform', () => {
       const transformed = platform.transformTweets(tweets, []);
 
       expect(transformed[0].authorUsername).toBe('unknown');
+    });
+  });
+
+  describe('transformXquikTweets', () => {
+    it('should transform Xquik tweet search results', () => {
+      const transformed = platform.transformXquikTweets([{
+        id: 'tweet123',
+        text: 'Creator analytics update',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        likeCount: 20,
+        retweetCount: 4,
+        replyCount: 2,
+        quoteCount: 1,
+        viewCount: 1000,
+        author: {
+          id: 'user123',
+          username: 'creator',
+          name: 'Creator'
+        }
+      }]);
+
+      expect(transformed[0]).toMatchObject({
+        id: 'tweet123',
+        platform: 'twitter',
+        text: 'Creator analytics update',
+        authorUsername: 'creator',
+        likes: 20,
+        retweets: 4,
+        replies: 2,
+        quotes: 1,
+        impressions: 1000,
+        source: 'Xquik'
+      });
     });
   });
 

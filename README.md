@@ -47,6 +47,11 @@ cp .env.example .env
 2. Create a project and app in the Developer Portal
 3. Get your API Key, API Secret, and Bearer Token
 
+#### Xquik X Search
+1. Create an Xquik API key from your Xquik dashboard
+2. Set `XQUIK_API_KEY` to use Xquik for Twitter/X search and timeline reads
+3. Optionally set `XQUIK_BASE_URL` when testing against another Xquik host
+
 ## Usage
 
 ### Start the Server
@@ -188,6 +193,7 @@ GET /api/platforms/twitter/analytics
 - Tweets with metrics
 - Followers/following
 - Mentions
+- Optional Xquik-backed tweet search and recent content reads
 
 ## Mock Data
 

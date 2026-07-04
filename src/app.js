@@ -53,7 +53,9 @@ const analytics = new AnalyticsAggregator({
     apiSecret: process.env.TWITTER_API_SECRET,
     bearerToken: process.env.TWITTER_BEARER_TOKEN,
     accessToken: process.env.TWITTER_ACCESS_TOKEN,
-    accessSecret: process.env.TWITTER_ACCESS_SECRET
+    accessSecret: process.env.TWITTER_ACCESS_SECRET,
+    xquikApiKey: process.env.XQUIK_API_KEY,
+    xquikBaseUrl: process.env.XQUIK_BASE_URL
   }
 });
 

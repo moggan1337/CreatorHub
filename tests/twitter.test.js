@@ -3,6 +3,7 @@
  */
 
 const TwitterPlatform = require('../src/platforms/twitter');
+const axios = require('axios');
 
 describe('TwitterPlatform', () => {
   let platform;
@@ -80,6 +81,18 @@ describe('TwitterPlatform', () => {
     it('should return correct authorization header', () => {
       const headers = platform.getBearerHeaders();
       expect(headers.Authorization).toBe('Bearer test_bearer_token');
+      expect(headers['Content-Type']).toBe('application/json');
+    });
+  });
+
+  describe('getXquikHeaders', () => {
+    it('should use the Xquik API key header', () => {
+      const xquikPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key'
+      });
+      const headers = xquikPlatform.getXquikHeaders();
+
+      expect(headers['x-api-key']).toBe('xq_test_key');
       expect(headers['Content-Type']).toBe('application/json');
     });
   });
@@ -261,6 +274,32 @@ describe('TwitterPlatform', () => {
         impressions: 1000,
         source: 'Xquik'
       });
+    });
+  });
+
+  describe('searchXquikTweets', () => {
+    it('should send documented Xquik auth and query parameters', async () => {
+      const getSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+        data: { tweets: [] }
+      });
+      const xquikPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key',
+        xquikBaseUrl: 'https://example.com'
+      });
+
+      await xquikPlatform.searchXquikTweets('creator growth', 25);
+
+      expect(getSpy).toHaveBeenCalledWith('https://example.com/api/v1/x/tweets/search', {
+        headers: {
+          'x-api-key': 'xq_test_key',
+          'Content-Type': 'application/json'
+        },
+        params: {
+          q: 'creator growth',
+          limit: 25
+        }
+      });
+      getSpy.mockRestore();
     });
   });
 

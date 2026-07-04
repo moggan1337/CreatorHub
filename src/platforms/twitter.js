@@ -62,7 +62,7 @@ class TwitterPlatform {
    */
   getXquikHeaders() {
     return {
-      'Authorization': `Bearer ${this.xquikApiKey}`,
+      'x-api-key': this.xquikApiKey,
       'Content-Type': 'application/json'
     };
   }
@@ -389,7 +389,7 @@ class TwitterPlatform {
       const response = await axios.get(this.buildXquikUrl('/api/v1/x/tweets/search'), {
         headers: this.getXquikHeaders(),
         params: {
-          query,
+          q: query,
           limit: Math.min(maxResults, 100)
         }
       });

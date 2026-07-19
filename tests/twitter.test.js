@@ -359,6 +359,26 @@ describe('TwitterPlatform', () => {
     });
   });
 
+  describe('getTweetAnalytics', () => {
+    it('should calculate analytics from the normalized tweet fields', async () => {
+      jest.spyOn(platform, 'getTweet').mockResolvedValue({
+        retweets: 10,
+        likes: 20,
+        replies: 5,
+        quotes: 2,
+        impressions: 1000
+      });
+
+      const analytics = await platform.getTweetAnalytics('tweet123');
+
+      expect(analytics.metrics).toMatchObject({
+        impressions: 1000,
+        engagements: 37,
+        engagementRate: '3.70'
+      });
+    });
+  });
+
   describe('getUserIdByUsername', () => {
     it('should return mock user ID when not configured', async () => {
       const unconfiguredPlatform = new TwitterPlatform();

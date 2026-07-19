@@ -300,14 +300,20 @@ class TwitterPlatform {
    */
   async getTweetAnalytics(tweetId) {
     const tweet = await this.getTweet(tweetId);
+    const retweets = tweet.retweets || 0;
+    const likes = tweet.likes || 0;
+    const replies = tweet.replies || 0;
+    const quotes = tweet.quotes || 0;
+    const impressions = tweet.impressions || 0;
+    const engagements = retweets + likes + replies + quotes;
     
     return {
       platform: 'twitter',
       tweetId,
       metrics: {
-        impressions: tweet.metrics?.retweets + tweet.metrics?.likes * 50 || 0,
-        engagements: (tweet.metrics?.retweets || 0) + (tweet.metrics?.likes || 0) + (tweet.metrics?.replies || 0) + (tweet.metrics?.quotes || 0),
-        engagementRate: ((tweet.metrics?.retweets + tweet.metrics?.likes) / (tweet.metrics?.retweets + tweet.metrics?.likes + 100) * 100).toFixed(2),
+        impressions,
+        engagements,
+        engagementRate: (impressions > 0 ? engagements / impressions * 100 : 0).toFixed(2),
         urlClicks: Math.floor(Math.random() * 100),
         profileClicks: Math.floor(Math.random() * 50),
         shareClicks: Math.floor(Math.random() * 30)

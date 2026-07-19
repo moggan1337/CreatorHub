@@ -3,6 +3,7 @@
  */
 
 const TwitterPlatform = require('../src/platforms/twitter');
+const axios = require('axios');
 
 describe('TwitterPlatform', () => {
   let platform;
@@ -36,6 +37,16 @@ describe('TwitterPlatform', () => {
       
       delete process.env.TWITTER_BEARER_TOKEN;
     });
+
+    it('should initialize Xquik configuration', () => {
+      const configPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key',
+        xquikBaseUrl: 'https://example.com'
+      });
+
+      expect(configPlatform.xquikApiKey).toBe('xq_test_key');
+      expect(configPlatform.xquikBaseUrl).toBe('https://example.com');
+    });
   });
 
   describe('isConfigured', () => {
@@ -55,12 +66,33 @@ describe('TwitterPlatform', () => {
       const unconfiguredPlatform = new TwitterPlatform();
       expect(unconfiguredPlatform.isConfigured()).toBe(false);
     });
+
+    it('should return true when Xquik API key is present', () => {
+      const xquikPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key'
+      });
+
+      expect(xquikPlatform.isConfigured()).toBe(true);
+      expect(xquikPlatform.hasXquikCredentials()).toBe(true);
+    });
   });
 
   describe('getBearerHeaders', () => {
     it('should return correct authorization header', () => {
       const headers = platform.getBearerHeaders();
       expect(headers.Authorization).toBe('Bearer test_bearer_token');
+      expect(headers['Content-Type']).toBe('application/json');
+    });
+  });
+
+  describe('getXquikHeaders', () => {
+    it('should use the Xquik API key header', () => {
+      const xquikPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key'
+      });
+      const headers = xquikPlatform.getXquikHeaders();
+
+      expect(headers['x-api-key']).toBe('xq_test_key');
       expect(headers['Content-Type']).toBe('application/json');
     });
   });
@@ -103,6 +135,30 @@ describe('TwitterPlatform', () => {
       const unconfiguredPlatform = new TwitterPlatform();
       const tweets = await unconfiguredPlatform.getTweets('testuser', 3);
       expect(tweets.length).toBe(3);
+    });
+
+    it('should preserve the Twitter timeline route for numeric user IDs', async () => {
+      const getSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+        data: { data: [], includes: { users: [] } }
+      });
+      const xquikPlatform = new TwitterPlatform({
+        bearerToken: 'test_bearer_token',
+        xquikApiKey: 'xq_test_key'
+      });
+
+      await xquikPlatform.getTweets('123456', 25);
+
+      expect(getSpy).toHaveBeenCalledWith(
+        'https://api.twitter.com/2/users/123456/tweets',
+        expect.objectContaining({
+          headers: {
+            'Authorization': 'Bearer test_bearer_token',
+            'Content-Type': 'application/json'
+          },
+          params: expect.objectContaining({ max_results: 25 })
+        })
+      );
+      getSpy.mockRestore();
     });
   });
 
@@ -212,6 +268,65 @@ describe('TwitterPlatform', () => {
     });
   });
 
+  describe('transformXquikTweets', () => {
+    it('should transform Xquik tweet search results', () => {
+      const transformed = platform.transformXquikTweets([{
+        id: 'tweet123',
+        text: 'Creator analytics update',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        likeCount: 20,
+        retweetCount: 4,
+        replyCount: 2,
+        quoteCount: 1,
+        viewCount: 1000,
+        author: {
+          id: 'user123',
+          username: 'creator',
+          name: 'Creator'
+        }
+      }]);
+
+      expect(transformed[0]).toMatchObject({
+        id: 'tweet123',
+        platform: 'twitter',
+        text: 'Creator analytics update',
+        authorUsername: 'creator',
+        likes: 20,
+        retweets: 4,
+        replies: 2,
+        quotes: 1,
+        impressions: 1000,
+        source: 'Xquik'
+      });
+    });
+  });
+
+  describe('searchXquikTweets', () => {
+    it('should send documented Xquik auth and query parameters', async () => {
+      const getSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+        data: { tweets: [] }
+      });
+      const xquikPlatform = new TwitterPlatform({
+        xquikApiKey: 'xq_test_key',
+        xquikBaseUrl: 'https://example.com'
+      });
+
+      await xquikPlatform.searchXquikTweets('creator growth', 25);
+
+      expect(getSpy).toHaveBeenCalledWith('https://example.com/api/v1/x/tweets/search', {
+        headers: {
+          'x-api-key': 'xq_test_key',
+          'Content-Type': 'application/json'
+        },
+        params: {
+          q: 'creator growth',
+          limit: 25
+        }
+      });
+      getSpy.mockRestore();
+    });
+  });
+
   describe('getMockTweets', () => {
     it('should generate tweets with expected structure', () => {
       const tweets = platform.getMockTweets(3);
@@ -265,6 +380,26 @@ describe('TwitterPlatform', () => {
       expect(tweet).toHaveProperty('id', 'tweet123');
       expect(tweet).toHaveProperty('platform', 'twitter');
       expect(tweet).toHaveProperty('text');
+    });
+  });
+
+  describe('getTweetAnalytics', () => {
+    it('should calculate analytics from the normalized tweet fields', async () => {
+      jest.spyOn(platform, 'getTweet').mockResolvedValue({
+        retweets: 10,
+        likes: 20,
+        replies: 5,
+        quotes: 2,
+        impressions: 1000
+      });
+
+      const analytics = await platform.getTweetAnalytics('tweet123');
+
+      expect(analytics.metrics).toMatchObject({
+        impressions: 1000,
+        engagements: 37,
+        engagementRate: '3.70'
+      });
     });
   });
 

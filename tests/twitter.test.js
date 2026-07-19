@@ -136,6 +136,30 @@ describe('TwitterPlatform', () => {
       const tweets = await unconfiguredPlatform.getTweets('testuser', 3);
       expect(tweets.length).toBe(3);
     });
+
+    it('should preserve the Twitter timeline route for numeric user IDs', async () => {
+      const getSpy = jest.spyOn(axios, 'get').mockResolvedValue({
+        data: { data: [], includes: { users: [] } }
+      });
+      const xquikPlatform = new TwitterPlatform({
+        bearerToken: 'test_bearer_token',
+        xquikApiKey: 'xq_test_key'
+      });
+
+      await xquikPlatform.getTweets('123456', 25);
+
+      expect(getSpy).toHaveBeenCalledWith(
+        'https://api.twitter.com/2/users/123456/tweets',
+        expect.objectContaining({
+          headers: {
+            'Authorization': 'Bearer test_bearer_token',
+            'Content-Type': 'application/json'
+          },
+          params: expect.objectContaining({ max_results: 25 })
+        })
+      );
+      getSpy.mockRestore();
+    });
   });
 
   describe('searchTweets', () => {

@@ -126,7 +126,8 @@ class TwitterPlatform {
    * Fetch user's tweets
    */
   async getTweets(usernameOrId, maxResults = 10) {
-    if (this.hasXquikCredentials()) {
+    const isNumericUserId = /^\d+$/.test(String(usernameOrId));
+    if (this.hasXquikCredentials() && !isNumericUserId) {
       const query = usernameOrId && usernameOrId !== 'me'
         ? `from:${String(usernameOrId).replace('@', '')}`
         : (process.env.XQUIK_DEFAULT_QUERY || 'creator OR marketing OR growth');
